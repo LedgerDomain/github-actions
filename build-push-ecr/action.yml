@@ -19,7 +19,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: ../setup-env
+    - uses: ./setup-env
 
     # Set up Docker Buildx - use remote BuildKit daemon for persistent cache
     - name: Set up Docker Buildx
