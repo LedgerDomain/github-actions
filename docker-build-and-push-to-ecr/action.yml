@@ -14,7 +14,7 @@ inputs:
   src-path:
     description: "What folder to be (generally to find the Dockerfile in) default is root of repo"
     required: false
-  docker-build-and-push-to-ecr:
+  push-to-ecr:
     description: "Whether to push the built image to ECR. Set to 'false' for build-only mode."
     required: false
     default: 'true'
@@ -34,7 +34,7 @@ runs:
         endpoint: tcp://buildkitd.infrastructure.svc.cluster.local:1234
 
     - name: Login to Amazon ECR
-      if: inputs.docker-build-and-push-to-ecr == 'true'
+      if: inputs.push-to-ecr == 'true'
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       env:
@@ -53,7 +53,7 @@ runs:
         ENVIRONMENT=${{ inputs.build-for-environment }}
         BRANCH_NAME=${{env.ENV_NAME}}
         IMAGE_TAG=$ENVIRONMENT-${{ env.SLUG }}
-        PUSH_TO_ECR=${{ inputs.docker-build-and-push-to-ecr }}
+        PUSH_TO_ECR=${{ inputs.push-to-ecr }}
         OUTPUT_ARTIFACTS=${{ inputs.output-artifacts }}
 
         # Set up cache reference (always use ECR for shared cache)
