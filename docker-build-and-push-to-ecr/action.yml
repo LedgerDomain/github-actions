@@ -55,7 +55,6 @@ runs:
         IMAGE_TAG=$ENVIRONMENT-${{ env.SLUG }}
         PUSH_TO_ECR=${{ inputs.push-to-ecr }}
         OUTPUT_ARTIFACTS=${{ inputs.output-artifacts }}
-        EXTRA_BUILD_ARGS="${{ inputs.extra-build-args }}"
 
         # Set up cache reference (always use ECR for shared cache)
         REPO_IMAGE=987071820073.dkr.ecr.us-west-2.amazonaws.com/$IMAGE_NAME
@@ -70,12 +69,6 @@ runs:
         # Cache args (always use registry cache for all build modes)
         CACHE_ARGS="--cache-from type=registry,ref=$CACHE_IMAGE"
 
-        # Debug: Show what we're building with
-        echo "=== Build configuration ==="
-        echo "EXTRA_BUILD_ARGS: $EXTRA_BUILD_ARGS"
-        echo "BUILD_ARGS: $BUILD_ARGS"
-        echo "CACHE_ARGS: $CACHE_ARGS"
-
         # Determine build mode
         if [ "$PUSH_TO_ECR" = "true" ]; then
           # ECR push mode (original behavior)
@@ -85,7 +78,7 @@ runs:
           # Build with buildx using registry cache and push
           echo "Building with cache from: $CACHE_IMAGE"
           docker buildx build \
-            $EXTRA_BUILD_ARGS \
+            ${{ inputs.extra-build-args }} \
             $BUILD_ARGS \
             $CACHE_ARGS \
             --cache-to type=registry,ref=$CACHE_IMAGE,mode=max \
@@ -102,7 +95,7 @@ runs:
           echo "Building and extracting artifacts to: $OUTPUT_ARTIFACTS"
           echo "Using shared cache from: $CACHE_IMAGE"
           docker buildx build \
-            $EXTRA_BUILD_ARGS \
+            ${{ inputs.extra-build-args }} \
             $BUILD_ARGS \
             $CACHE_ARGS \
             --target artifacts \
@@ -116,7 +109,7 @@ runs:
           echo "Building image (no push to ECR)"
           echo "Using shared cache from: $CACHE_IMAGE"
           docker buildx build \
-            $EXTRA_BUILD_ARGS \
+            ${{ inputs.extra-build-args }} \
             $BUILD_ARGS \
             $CACHE_ARGS \
             .
