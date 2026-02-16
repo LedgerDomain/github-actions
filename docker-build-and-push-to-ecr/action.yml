@@ -74,6 +74,12 @@ runs:
         echo "${{ inputs.extra-build-args }}"
         echo "=== End debug ==="
 
+        # Debug: Show push-to-ecr value
+        echo "=== Debug: PUSH_TO_ECR value ==="
+        echo "PUSH_TO_ECR='$PUSH_TO_ECR'"
+        echo "OUTPUT_ARTIFACTS='$OUTPUT_ARTIFACTS'"
+        echo "=== End debug ==="
+
         # Determine build mode
         if [ "$PUSH_TO_ECR" = "true" ]; then
           # ECR push mode (original behavior)
