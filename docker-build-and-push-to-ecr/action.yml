@@ -69,6 +69,11 @@ runs:
         # Cache args (always use registry cache for all build modes)
         CACHE_ARGS="--cache-from type=registry,ref=$CACHE_IMAGE"
 
+        # Debug: Show what extra-build-args contains
+        echo "=== Debug: extra-build-args ==="
+        echo "${{ inputs.extra-build-args }}"
+        echo "=== End debug ==="
+
         # Determine build mode
         if [ "$PUSH_TO_ECR" = "true" ]; then
           # ECR push mode (original behavior)
