@@ -1,0 +1,118 @@
+name: 'Build and Push to ECR'
+description: 'Builds a docker image with advanced caching and pushes it to Amazon ECR'
+
+inputs:
+  module-name:
+    description: "Name of the module to build. Used as the default image name and src dir unless 'image-name' or 'src-path' are used."
+    required: true
+  build-for-environment:
+    description: "The backend environment we are building for (API calls are pointed to).  This should be one of (development, staging, production)."
+    required: true
+  extra-build-args:
+    description: "Extra args passed to 'docker build'."
+    required: false
+  src-path:
+    description: "What folder to be (generally to find the Dockerfile in) default is root of repo"
+    required: false
+  docker-build-and-push-to-ecr:
+    description: "Whether to push the built image to ECR. Set to 'false' for build-only mode."
+    required: false
+    default: 'true'
+  output-artifacts:
+    description: "If set, extracts artifacts to this local path using --output. Requires a multi-stage Dockerfile with an 'artifacts' target."
+    required: false
+
+
+runs:
+  using: 'composite'
+  steps:
+    # Set up Docker Buildx - use remote BuildKit daemon for persistent cache
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: remote
+        endpoint: tcp://buildkitd.infrastructure.svc.cluster.local:1234
+
+    - name: Login to Amazon ECR
+      if: inputs.docker-build-and-push-to-ecr == 'true'
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      env:
+        AWS_REGION: us-west-2
+      with:
+        registries: "987071820073"
+
+    - shell: bash
+      env:
+        AWS_REGION: us-west-2
+      run: |
+        # Env var parsing
+        INPUT_SRC_PATH=${{ inputs.src-path }}
+        IMAGE_NAME=${{ inputs.module-name }}
+        SRC_PATH=${INPUT_SRC_PATH:-"./"}
+        ENVIRONMENT=${{ inputs.build-for-environment }}
+        BRANCH_NAME=${{env.ENV_NAME}}
+        IMAGE_TAG=$ENVIRONMENT-${{ env.SLUG }}
+        PUSH_TO_ECR=${{ inputs.docker-build-and-push-to-ecr }}
+        OUTPUT_ARTIFACTS=${{ inputs.output-artifacts }}
+
+        # Set up cache reference (always use ECR for shared cache)
+        REPO_IMAGE=987071820073.dkr.ecr.us-west-2.amazonaws.com/$IMAGE_NAME
+        CACHE_IMAGE=$REPO_IMAGE:buildcache
+
+        # Go into folder
+        cd $SRC_PATH
+
+        # Generic args
+        BUILD_ARGS="--build-arg BUILD_FOR_ENVIRONMENT=$ENVIRONMENT --build-arg IMAGE_TAG=$IMAGE_TAG"
+
+        # Cache args (always use registry cache for all build modes)
+        CACHE_ARGS="--cache-from type=registry,ref=$CACHE_IMAGE"
+
+        # Determine build mode
+        if [ "$PUSH_TO_ECR" = "true" ]; then
+          # ECR push mode (original behavior)
+          # Create repo if needed
+          aws ecr create-repository --repository-name $IMAGE_NAME || true
+
+          # Build with buildx using registry cache and push
+          echo "Building with cache from: $CACHE_IMAGE"
+          docker buildx build \
+            ${{ inputs.extra-build-args }} \
+            $BUILD_ARGS \
+            $CACHE_ARGS \
+            --cache-to type=registry,ref=$CACHE_IMAGE,mode=max \
+            --tag $REPO_IMAGE:$IMAGE_TAG \
+            --tag $REPO_IMAGE:latest \
+            --push \
+            --provenance=false \
+            .
+
+          echo "Build complete! Tagged as $IMAGE_TAG and latest"
+
+        elif [ -n "$OUTPUT_ARTIFACTS" ]; then
+          # Artifact extraction mode (build-only with output)
+          echo "Building and extracting artifacts to: $OUTPUT_ARTIFACTS"
+          echo "Using shared cache from: $CACHE_IMAGE"
+          docker buildx build \
+            ${{ inputs.extra-build-args }} \
+            $BUILD_ARGS \
+            $CACHE_ARGS \
+            --target artifacts \
+            --output type=local,dest=$OUTPUT_ARTIFACTS \
+            .
+
+          echo "Build complete! Artifacts extracted to $OUTPUT_ARTIFACTS"
+
+        else
+          # Build-only mode (no push, no output)
+          echo "Building image (no push to ECR)"
+          echo "Using shared cache from: $CACHE_IMAGE"
+          docker buildx build \
+            ${{ inputs.extra-build-args }} \
+            $BUILD_ARGS \
+            $CACHE_ARGS \
+            .
+
+          echo "Build complete!"
+        fi
